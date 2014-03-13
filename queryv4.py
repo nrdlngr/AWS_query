@@ -10,8 +10,8 @@
 #   queryv4.py https://s3.amazonaws.com
 #   queryv4.py "GET https://ec2.amazonaws.com/?Action=DescribeRegions&Version=2013-10-15"
 # 
-# The script assumes that you have the access_key and 
-# secret_key environment variables set to your AWS credentials.
+# The script assumes that you have the AWS_ACCESS_KEY and 
+# AWS_SECRET_KEY environment variables set to your AWS credentials.
 # To set these up, see the following topics:
 #   Windows:
 #       http://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/InstallEC2CommandLineTools.html#set-aws-credentials
