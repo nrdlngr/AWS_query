@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # AWS SigV4 signing tool
 # Written by Eric Nordlund (ericn@)
 # 

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # AWS SigV2 signing tool
 # Written by Eric Nordlund (ericn@)
 # 
@@ -81,7 +81,6 @@ urlencoded_signature = urllib.quote_plus(signature)
 
 # Complete the request
 signed_string = parsed_url.scheme + '://' + parsed_url.netloc + '?' + query_string + "&Signature=" + urlencoded_signature 
-
 # Send the request
 r = requests.get(signed_string)
 
