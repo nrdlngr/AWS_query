@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # AWS SigV4 signing tool
-# Written by Eric Nordlund (ericn@)
 # 
 # This script allows you to manually sign HTTP query API requests to AWS
 # 
@@ -146,7 +145,6 @@ else:
     signed_url = parsed_url.scheme + '://' + parsed_url.netloc + parsed_url.path + '?' + urllib.urlencode(params_and_headers).replace('+', '%20') + '&X-Amz-Signature=' + signature
 
 print "\nAWS SigV4 signing tool"
-print "Written by Eric Nordlund (ericn@)"
 
 # Print the request and subsequent response
 print "\nBEGIN REQUEST"
