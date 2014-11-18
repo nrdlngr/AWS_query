@@ -60,6 +60,8 @@ parsed_url = urlparse.urlparse(url)
 # Split the host into peices and pull the service and region from it.
 # If no region is in the url, then us-east-1 is assumed.
 host_parts = string.split(parsed_url.netloc, '.')
+
+
 if len(host_parts) == 4:
     service = host_parts[0]
     region = host_parts[1]
@@ -79,18 +81,15 @@ datestamp = t.strftime("%Y%m%d")
 # CREATE THE CANONICAL QUERY STRING
 # Get the query parameters
 query_params = urlparse.parse_qsl(parsed_url.query)
-# Sort the query params by key name
-sorted_query = sorted(query_params)
-# Urlencode the sorted query
-query_string = urllib.urlencode(sorted_query)
-# Replace '+' with '%20' in query string; the previous method replaces 
-# blank spaces with '+' symbols, and AWS expects '%20' instead.
-canonical_query_string = query_string.replace('+', '%20')
+
+# Get the Action value from the query (if it exists); this can be used in the X-Amz-Target
+if 'Action' in query_params:
+    param_dict = dict(query_params)
+    action = param_dict['Action']
 
 # Create the scope and the credential string
 scope = datestamp + '/' + region + '/' + service + '/' + 'aws4_request'
 credential_string = access_key + '/' + scope
-# print credential_string
 
 signed_headers = 'host'
 
@@ -99,12 +98,12 @@ headers = [
     ('X-Amz-Date', amzdate),
     ('X-Amz-Expires', '300'),
     ('X-Amz-Credential', credential_string),
-    ('X-Amz-SignedHeaders', signed_headers) 
+    ('X-Amz-SignedHeaders', signed_headers)
     ]
 
 # When sending a GET request, the headers go in the query string and they are not
 # made lowercase.
-canonical_headers = urllib.urlencode(sorted(headers)).replace('+', '%20')
+# canonical_headers = urllib.urlencode(sorted(headers)).replace('+', '%20')
 
 # S3 seems to want a different payload hash than other services
 if service == 's3':
@@ -117,13 +116,14 @@ canonical_request_path = parsed_url.path
 if canonical_request_path == '':
     canonical_request_path = '/'
 
-
+params_and_headers = query_params + headers
+sorted_params_and_headers = urllib.urlencode(sorted(params_and_headers)).replace('+', '%20')
 # Create the canonical request
 
-if canonical_query_string == '':
+if query_params == '':
     canonical_request = http_verb + '\n' + canonical_request_path + '\n' + canonical_headers + '\n' + 'host:' + parsed_url.netloc + '\n' + '\n' + signed_headers + '\n' + payload_hash
 else:
-    canonical_request = http_verb + '\n' + canonical_request_path + '\n' + canonical_query_string + '&' + canonical_headers + '\n' + 'host:' + parsed_url.netloc + '\n' + '\n' + signed_headers + '\n' + payload_hash
+    canonical_request = http_verb + '\n' + canonical_request_path + '\n' + sorted_params_and_headers + '\n' + 'host:' + parsed_url.netloc + '\n' + '\n' + signed_headers + '\n' + payload_hash    
 
 # Create the string to sign
 string_to_sign = 'AWS4-HMAC-SHA256' + '\n' + amzdate + '\n' + scope + '\n' + hashlib.sha256(canonical_request).hexdigest()
@@ -133,9 +133,9 @@ signing_key = getSignatureKey(secret_key, datestamp, region, service)
 
 # Sign the string_to_sign using the signing_key
 signature = hmac.new(signing_key, (string_to_sign).encode("utf-8"), hashlib.sha256).hexdigest()
-                             
-# Add params and headers into one list, then urlencode them for the HTTP request
-params_and_headers = query_params + headers
+
+# Recreate the params_and_headers string to start with the params and follow with headers.
+params_and_headers = sorted(query_params) + sorted(headers)
 
 # Create the signed url to send in the request.
 # S3 can accept requests on just the service, so we have to create a handler for requests without query parameters.
@@ -151,7 +151,7 @@ print "\nBEGIN REQUEST"
 print "++++++++++++++++++++++++++++++++++++"
 print signed_url
 
-r = requests.get(signed_url)
+r = requests.get(signed_url, verify=False)
 
 print "\nRESPONSE"
 print "++++++++++++++++++++++++++++++++++++"
