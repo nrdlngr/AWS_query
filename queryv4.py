@@ -9,8 +9,7 @@
 #   queryv4.py https://s3.amazonaws.com
 #   queryv4.py "GET https://ec2.amazonaws.com/?Action=DescribeRegions&Version=2013-10-15"
 # 
-# The script assumes that you have the AWS_ACCESS_KEY and 
-# AWS_SECRET_KEY environment variables set to your AWS credentials.
+# The script assumes that you have AWS credentials configured.
 # To set these up, see the following topics:
 #   Windows:
 #       http://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/InstallEC2CommandLineTools.html#set-aws-credentials
@@ -19,16 +18,15 @@
 
 import os
 import sys
-import urllib
-import urllib2
+from urllib.parse import urlparse, parse_qsl, urlencode
 import datetime
 import string
 import hmac
 import hashlib
 import base64
 import argparse
-import urlparse
 import requests
+import botocore.session
 
 def sign(key, msg):
     return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).digest()
@@ -55,12 +53,11 @@ http_verb = 'GET'
 url = request.lstrip("GET ")
 
 # Parse the url to get the host, path, and params.
-parsed_url = urlparse.urlparse(url)
+parsed_url = urlparse(url)
 
 # Split the host into peices and pull the service and region from it.
 # If no region is in the url, then us-east-1 is assumed.
-host_parts = string.split(parsed_url.netloc, '.')
-
+host_parts = parsed_url.netloc.split('.')
 
 if len(host_parts) == 4:
     service = host_parts[0]
@@ -69,9 +66,10 @@ else:
     service = host_parts[0]
     region = 'us-east-1'
 
-# Pull user's AWS credentials from env vars
-access_key = os.environ.get('AWS_ACCESS_KEY')
-secret_key = os.environ.get('AWS_SECRET_KEY')
+# Pull user's AWS credentials from botocore session
+session = botocore.session.get_session()
+access_key = session.get_credentials().access_key
+secret_key = session.get_credentials().secret_key
 
 # Create timestamp for headers and date format for credential string
 t = datetime.datetime.utcnow()
@@ -80,7 +78,7 @@ datestamp = t.strftime("%Y%m%d")
 
 # CREATE THE CANONICAL QUERY STRING
 # Get the query parameters
-query_params = urlparse.parse_qsl(parsed_url.query)
+query_params = parse_qsl(parsed_url.query)
 
 # Get the Action value from the query (if it exists); this can be used in the X-Amz-Target
 if 'Action' in query_params:
@@ -109,7 +107,8 @@ headers = [
 if service == 's3':
     payload_hash = 'UNSIGNED-PAYLOAD'
 else:
-    payload_hash = hashlib.sha256("").hexdigest()
+    payload = ""
+    payload_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 # Get the path. If path is empty, replace it with a '/' in the canonical request.
 canonical_request_path = parsed_url.path
@@ -117,7 +116,7 @@ if canonical_request_path == '':
     canonical_request_path = '/'
 
 params_and_headers = query_params + headers
-sorted_params_and_headers = urllib.urlencode(sorted(params_and_headers)).replace('+', '%20')
+sorted_params_and_headers = urlencode(sorted(params_and_headers)).replace('+', '%20')
 # Create the canonical request
 
 if query_params == '':
@@ -126,7 +125,7 @@ else:
     canonical_request = http_verb + '\n' + canonical_request_path + '\n' + sorted_params_and_headers + '\n' + 'host:' + parsed_url.netloc + '\n' + '\n' + signed_headers + '\n' + payload_hash    
 
 # Create the string to sign
-string_to_sign = 'AWS4-HMAC-SHA256' + '\n' + amzdate + '\n' + scope + '\n' + hashlib.sha256(canonical_request).hexdigest()
+string_to_sign = 'AWS4-HMAC-SHA256' + '\n' + amzdate + '\n' + scope + '\n' + hashlib.sha256(canonical_request.encode("utf-8")).hexdigest()
 
 # Create the signing key
 signing_key = getSignatureKey(secret_key, datestamp, region, service)
@@ -140,19 +139,19 @@ params_and_headers = sorted(query_params) + sorted(headers)
 # Create the signed url to send in the request.
 # S3 can accept requests on just the service, so we have to create a handler for requests without query parameters.
 if parsed_url.path == '':
-    signed_url = parsed_url.scheme + '://' + parsed_url.netloc + '?' + urllib.urlencode(params_and_headers).replace('+', '%20') + '&X-Amz-Signature=' + signature
+    signed_url = parsed_url.scheme + '://' + parsed_url.netloc + '?' + urlencode(params_and_headers).replace('+', '%20') + '&X-Amz-Signature=' + signature
 else:
-    signed_url = parsed_url.scheme + '://' + parsed_url.netloc + parsed_url.path + '?' + urllib.urlencode(params_and_headers).replace('+', '%20') + '&X-Amz-Signature=' + signature
+    signed_url = parsed_url.scheme + '://' + parsed_url.netloc + parsed_url.path + '?' + urlencode(params_and_headers).replace('+', '%20') + '&X-Amz-Signature=' + signature
 
-print "\nAWS SigV4 signing tool"
+print("\nAWS SigV4 signing tool")
 
 # Print the request and subsequent response
-print "\nBEGIN REQUEST"
-print "++++++++++++++++++++++++++++++++++++"
-print signed_url
+print("\nBEGIN REQUEST")
+print("++++++++++++++++++++++++++++++++++++")
+print(signed_url)
 
 r = requests.get(signed_url, verify=False)
 
-print "\nRESPONSE"
-print "++++++++++++++++++++++++++++++++++++"
-print r.text
+print("\nRESPONSE")
+print("++++++++++++++++++++++++++++++++++++")
+print(r.text)
